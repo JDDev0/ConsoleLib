@@ -33,6 +33,8 @@ mod bindings {
     }
 }
 
+/// An abstraction for the console lib which automatically changes the console / terminal mode
+/// in [Console::new] and in the [Drop] implementation of [Console].
 pub struct Console<'a> {
     _lock: MutexGuard<'a, ()>
 }
@@ -43,6 +45,31 @@ static CONSOLE_MUTEX: Mutex<()> = Mutex::new(());
 static CONSOLE_PANIC_HOOK: Once = Once::new();
 
 impl Console<'_> {
+    /// Creates a new console lib abstraction.
+    ///
+    /// The [Console::new] method changes the console / terminal mode (Like disabling text echo).
+    ///
+    /// The [Drop] implementation of [Console] will reset the console / terminal to the original
+    /// state it was in prior to the creation of [Console].
+    ///
+    /// If a panic occurred if the console / terminal mode was already changed, the panic error message would be lost,
+    /// because the [Drop] implementation of [Console] would be called after the panic message was printed.
+    ///
+    /// Because of the mode changes there can only be one instance of a Console struct at once,
+    /// the [Err] variant is returned if there exists another instance of Console.
+    ///
+    /// # Custom Panic Hook
+    ///
+    /// With the `custom_panic_hook` feature the lost panic error message problem can be prevented.
+    /// If the `custom_panic_hook` feature is enabled a panic hook will be created after the first
+    /// time the console / terminal mode is changed inside the [Console::new] method -
+    /// the newly set panic hook persists until the whole program is terminated.
+    /// When a panic occurs, the panic hook checks if a Console instance is still present.
+    /// If this is the case, the console / terminal mode will be reset to the original state.
+    /// Afterward the standard panic hook will be run which will print the panic error message.
+    ///
+    /// If the `custom_panic_hook` feature is enabled and the program is panicking,
+    /// the [Drop] implementation of [Console] would not reset the console / terminal mode again.
     pub fn new() -> Result<Self, Box<ConsoleError>> {
         let lock = match CONSOLE_MUTEX.try_lock() {
             Ok(lock) => lock,
@@ -71,11 +98,12 @@ impl Console<'_> {
         Ok(Self { _lock: lock })
     }
 
+    /// Repaints the screen
     pub fn repaint(&self) {
         unsafe { bindings::clrscr() }
     }
 
-    /// Returns (x, y)
+    /// Returns the size of the console in characters as (width, rows)
     pub fn get_console_size(&self) -> (usize, usize) {
         let mut columns_int: c_int = -1;
         let mut rows_int: c_int = -1;
@@ -85,17 +113,23 @@ impl Console<'_> {
         (columns_int as usize, rows_int as usize)
     }
 
+    /// Checks if input (key or mouse) is available
     pub fn has_input(&self) -> bool {
         unsafe { bindings::hasInput() != 0 }
     }
 
+    /// Returns the key which was pressed or no key (Key(-1))
     pub fn get_key(&self) -> Key {
         let key = unsafe { bindings::getKey() as i32 };
 
         Key(key)
     }
 
-    /// Returns (x, y)
+    /// Returns the coordinates of the pos where a left click occurred as (x, y).
+    ///
+    /// x and y represent character positions.
+    ///
+    /// If x and y are -1, no left click occurred.
     pub fn get_mouse_pos_clicked(&self) -> (isize, isize) {
         let mut column_int: c_int = -1;
         let mut row_int: c_int = -1;
@@ -105,16 +139,23 @@ impl Console<'_> {
         (column_int as isize, row_int as isize)
     }
 
+    /// Draws text at the current cursor position.
+    ///
+    /// Behavior for Non-ASCII strings is terminal dependent.
     pub fn draw_text(&self, text: impl Into<String>) {
         let text = std::ffi::CString::new(text.into()).unwrap();
 
         unsafe { bindings::drawText(text.as_ptr()) }
     }
 
+    /// Sets the color for foreground and background
     pub fn set_color(&self, fg: Color, bg: Color) {
         unsafe { bindings::setColor(fg as c_int, bg as c_int) }
     }
 
+    /// Sets the color for foreground and background
+    ///
+    /// Foreground and background colors are swapped if inverted is true
     pub fn set_color_invertible(&self, fg: Color, bg: Color, inverted: bool) {
         if inverted {
             self.set_color(bg, fg);
@@ -123,6 +164,7 @@ impl Console<'_> {
         }
     }
 
+    /// Resets the color for foreground and background to [Color::Default]
     pub fn reset_color(&self) {
         unsafe { bindings::resetColor() }
     }
@@ -131,6 +173,7 @@ impl Console<'_> {
         unsafe { bindings::setUnderline(underline as c_int) }
     }
 
+    /// Sets the cursor pos to x and y
     pub fn set_cursor_pos(&self, x: usize, y: usize) {
         unsafe { bindings::setCursorPos(x as c_int, y as c_int) }
     }
@@ -148,6 +191,11 @@ impl Drop for Console<'_> {
     }
 }
 
+/// A representation of a key code from the console lib binding.
+///
+/// The key should be checked with the constants provided in the [Key] implementation (Like [Key::SPACE]).
+///
+/// No key maps to `Key(-1)` and unknown keys map to undefined values.
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Key(i32);
 
@@ -259,7 +307,8 @@ impl Key {
     pub fn is_arrow_key(&self) -> bool {
         (Key::LEFT..=Key::DOWN).contains(self)
     }
-    
+
+    /// Converts the keycode to an ASCII character if the key represents an ASCII character.
     pub fn to_ascii(&self) -> Option<u8> {
         self.is_ascii().then_some(self.0 as u8)
     }
@@ -267,16 +316,19 @@ impl Key {
     pub fn is_ascii(&self) -> bool {
         (0..=127).contains(&self.0)
     }
-    
+
+    /// Checks if a keycode is ASCII and numeric.
     pub fn is_numeric(&self) -> bool {
         self.is_ascii() && (self.0 as u8 as char).is_numeric()
     }
-    
+
+    /// Checks if a keycode is ASCII and alphanumeric.
     pub fn is_alphanumeric(&self) -> bool {
         self.is_ascii() && (self.0 as u8 as char).is_alphanumeric()
     }
 }
 
+/// 4-bit ANSI Color definitions for the native console lib bindings.
 #[repr(i8)]
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Color {
@@ -296,9 +348,12 @@ pub enum Color {
     LightPink,
     LightYellow,
     LightWhite,
+
+    /// Default color is [Color::Black] on unix and default color attributes on Windows.
     Default = -1
 }
 
+/// An error that occurred during creation of the [Console] struct.
 #[derive(Debug)]
 pub struct ConsoleError {
     message: String
