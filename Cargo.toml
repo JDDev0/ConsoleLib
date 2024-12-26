@@ -1,0 +1,19 @@
+[package]
+build = "build.rs"
+name = "console-lib"
+version = "0.1.0"
+edition = "2021"
+authors = ["JDDev0 <jddev0@dorneger.at>"]
+description = "A very simple TUI library for Linux (ncurses) and Windows (Win-API)"
+repository = "https://github.com/JDDev0/ConsoleLib"
+license-file = "LICENSE"
+readme = "README.md"
+keywords = ["console", "terminal"]
+
+[dependencies]
+
+[build-dependencies]
+cmake = "0.1.51"
+
+[features]
+custom_panic_hook = []
