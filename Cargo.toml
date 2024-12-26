@@ -6,7 +6,7 @@ edition = "2021"
 authors = ["JDDev0 <jddev0@dorneger.at>"]
 description = "A very simple TUI library for Linux (ncurses) and Windows (Win-API)"
 repository = "https://github.com/JDDev0/ConsoleLib"
-license-file = "LICENSE"
+license = "MIT"
 readme = "README.md"
 keywords = ["console", "terminal"]
 
