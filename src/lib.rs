@@ -103,7 +103,11 @@ impl Console<'_> {
         unsafe { bindings::clrscr() }
     }
 
-    /// Returns the size of the console in characters as (width, rows)
+    /// Returns the size of the console in characters as (width, rows).
+    ///
+    /// At the moment Console / Terminal resizing is currently not supported.
+    /// The size is read once after the console is initialized and internal
+    /// buffers are allocated for that size.
     pub fn get_console_size(&self) -> (usize, usize) {
         let mut columns_int: c_int = -1;
         let mut rows_int: c_int = -1;
@@ -113,35 +117,45 @@ impl Console<'_> {
         (columns_int as usize, rows_int as usize)
     }
 
-    /// Checks if input (key or mouse) is available
+    /// Checks if key input is available
     pub fn has_input(&self) -> bool {
         unsafe { bindings::hasInput() != 0 }
     }
 
-    /// Returns the key which was pressed or no key (Key(-1))
-    pub fn get_key(&self) -> Key {
+    /// Returns the key which was pressed or None
+    pub fn get_key(&self) -> Option<Key> {
         let key = unsafe { bindings::getKey() as i32 };
 
-        Key(key)
+        if key < 0 {
+            None
+        }else {
+            Some(Key(key as u16))
+        }
     }
 
     /// Returns the coordinates of the pos where a left click occurred as (x, y).
     ///
     /// x and y represent character positions.
     ///
-    /// If x and y are -1, no left click occurred.
-    pub fn get_mouse_pos_clicked(&self) -> (isize, isize) {
+    /// If None, no left click occurred.
+    pub fn get_mouse_pos_clicked(&self) -> Option<(usize, usize)> {
         let mut column_int: c_int = -1;
         let mut row_int: c_int = -1;
 
         unsafe { bindings::getMousePosClicked(&mut column_int, &mut row_int) }
 
-        (column_int as isize, row_int as isize)
+        if column_int < 0 || row_int < 0 {
+            None
+        }else {
+            Some((column_int as usize, row_int as usize))
+        }
     }
 
     /// Draws text at the current cursor position.
     ///
     /// Behavior for Non-ASCII strings is terminal dependent.
+    ///
+    /// Characters which are out of bounds will be ignored and not drawn.
     pub fn draw_text(&self, text: impl Into<String>) {
         let text = std::ffi::CString::new(text.into()).unwrap();
 
@@ -175,7 +189,14 @@ impl Console<'_> {
 
     /// Sets the cursor pos to x and y
     pub fn set_cursor_pos(&self, x: usize, y: usize) {
-        unsafe { bindings::setCursorPos(x as c_int, y as c_int) }
+        let x = x as c_int;
+        let y = y as c_int;
+
+        if x < 0 || y < 0 {
+            return;
+        }
+
+        unsafe { bindings::setCursorPos(x, y) }
     }
 }
 
@@ -195,86 +216,86 @@ impl Drop for Console<'_> {
 ///
 /// The key should be checked with the constants provided in the [Key] implementation (Like [Key::SPACE]).
 ///
-/// No key maps to `Key(-1)` and unknown keys map to undefined values.
+/// Unknown keys map to undefined values.
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct Key(i32);
+pub struct Key(u16);
 
 impl Key {
     //Ascii
-    pub const SPACE: Key = Key(b' ' as i32);
-    pub const EXCLAMATION_MARK: Key = Key(b'!' as i32);
-    pub const QUOTATION_MARK: Key = Key(b'"' as i32);
-    pub const NUMBER_SIGN: Key = Key(b'#' as i32);
-    pub const DOLLAR: Key = Key(b'$' as i32);
-    pub const PERCENT_SIGN: Key = Key(b'%' as i32);
-    pub const AMPERSAND: Key = Key(b'&' as i32);
-    pub const APOSTROPHE: Key = Key(b'\'' as i32);
-    pub const LEFT_PARENTHESIS: Key = Key(b'(' as i32);
-    pub const RIGHT_PARENTHESIS: Key = Key(b')' as i32);
-    pub const ASTERISK: Key = Key(b'*' as i32);
-    pub const PLUS: Key = Key(b'+' as i32);
-    pub const COMMA: Key = Key(b',' as i32);
-    pub const MINUS: Key = Key(b'-' as i32);
-    pub const DOT: Key = Key(b'.' as i32);
-    pub const SLASH: Key = Key(b'/' as i32);
+    pub const SPACE: Key = Key(b' ' as u16);
+    pub const EXCLAMATION_MARK: Key = Key(b'!' as u16);
+    pub const QUOTATION_MARK: Key = Key(b'"' as u16);
+    pub const NUMBER_SIGN: Key = Key(b'#' as u16);
+    pub const DOLLAR: Key = Key(b'$' as u16);
+    pub const PERCENT_SIGN: Key = Key(b'%' as u16);
+    pub const AMPERSAND: Key = Key(b'&' as u16);
+    pub const APOSTROPHE: Key = Key(b'\'' as u16);
+    pub const LEFT_PARENTHESIS: Key = Key(b'(' as u16);
+    pub const RIGHT_PARENTHESIS: Key = Key(b')' as u16);
+    pub const ASTERISK: Key = Key(b'*' as u16);
+    pub const PLUS: Key = Key(b'+' as u16);
+    pub const COMMA: Key = Key(b',' as u16);
+    pub const MINUS: Key = Key(b'-' as u16);
+    pub const DOT: Key = Key(b'.' as u16);
+    pub const SLASH: Key = Key(b'/' as u16);
 
-    pub const COLON: Key = Key(b':' as i32);
-    pub const SEMICOLON: Key = Key(b';' as i32);
-    pub const LESS_THAN_SIGN: Key = Key(b'<' as i32);
-    pub const EQUALS_SIGN: Key = Key(b'=' as i32);
-    pub const GREATER_THAN_SIGN: Key = Key(b'>' as i32);
-    pub const QUESTION_MARK: Key = Key(b'?' as i32);
-    pub const AT_SIGN: Key = Key(b'@' as i32);
+    pub const COLON: Key = Key(b':' as u16);
+    pub const SEMICOLON: Key = Key(b';' as u16);
+    pub const LESS_THAN_SIGN: Key = Key(b'<' as u16);
+    pub const EQUALS_SIGN: Key = Key(b'=' as u16);
+    pub const GREATER_THAN_SIGN: Key = Key(b'>' as u16);
+    pub const QUESTION_MARK: Key = Key(b'?' as u16);
+    pub const AT_SIGN: Key = Key(b'@' as u16);
 
-    pub const LEFT_BRACKET: Key = Key(b'[' as i32);
-    pub const BACKSLASH: Key = Key(b'\\' as i32);
-    pub const RIGHT_BRACKET: Key = Key(b']' as i32);
-    pub const CARET: Key = Key(b'^' as i32);
-    pub const UNDERSCORE: Key = Key(b'_' as i32);
-    pub const BACKTICK: Key = Key(b'`' as i32);
+    pub const LEFT_BRACKET: Key = Key(b'[' as u16);
+    pub const BACKSLASH: Key = Key(b'\\' as u16);
+    pub const RIGHT_BRACKET: Key = Key(b']' as u16);
+    pub const CARET: Key = Key(b'^' as u16);
+    pub const UNDERSCORE: Key = Key(b'_' as u16);
+    pub const BACKTICK: Key = Key(b'`' as u16);
 
-    pub const LEFT_CURLY_BRACKET: Key = Key(b'{' as i32);
-    pub const VERTICAL_BAR: Key = Key(b'|' as i32);
-    pub const RIGHT_CURLY_BRACKET: Key = Key(b'}' as i32);
-    pub const TILDE: Key = Key(b'~' as i32);
+    pub const LEFT_CURLY_BRACKET: Key = Key(b'{' as u16);
+    pub const VERTICAL_BAR: Key = Key(b'|' as u16);
+    pub const RIGHT_CURLY_BRACKET: Key = Key(b'}' as u16);
+    pub const TILDE: Key = Key(b'~' as u16);
 
-    pub const DIGIT_0: Key = Key(b'0' as i32);
-    pub const DIGIT_1: Key = Key(b'1' as i32);
-    pub const DIGIT_2: Key = Key(b'2' as i32);
-    pub const DIGIT_3: Key = Key(b'3' as i32);
-    pub const DIGIT_4: Key = Key(b'4' as i32);
-    pub const DIGIT_5: Key = Key(b'5' as i32);
-    pub const DIGIT_6: Key = Key(b'6' as i32);
-    pub const DIGIT_7: Key = Key(b'7' as i32);
-    pub const DIGIT_8: Key = Key(b'8' as i32);
-    pub const DIGIT_9: Key = Key(b'9' as i32);
+    pub const DIGIT_0: Key = Key(b'0' as u16);
+    pub const DIGIT_1: Key = Key(b'1' as u16);
+    pub const DIGIT_2: Key = Key(b'2' as u16);
+    pub const DIGIT_3: Key = Key(b'3' as u16);
+    pub const DIGIT_4: Key = Key(b'4' as u16);
+    pub const DIGIT_5: Key = Key(b'5' as u16);
+    pub const DIGIT_6: Key = Key(b'6' as u16);
+    pub const DIGIT_7: Key = Key(b'7' as u16);
+    pub const DIGIT_8: Key = Key(b'8' as u16);
+    pub const DIGIT_9: Key = Key(b'9' as u16);
 
-    pub const A: Key = Key(b'a' as i32);
-    pub const B: Key = Key(b'b' as i32);
-    pub const C: Key = Key(b'c' as i32);
-    pub const D: Key = Key(b'd' as i32);
-    pub const E: Key = Key(b'e' as i32);
-    pub const F: Key = Key(b'f' as i32);
-    pub const G: Key = Key(b'g' as i32);
-    pub const H: Key = Key(b'h' as i32);
-    pub const I: Key = Key(b'i' as i32);
-    pub const J: Key = Key(b'j' as i32);
-    pub const K: Key = Key(b'k' as i32);
-    pub const L: Key = Key(b'l' as i32);
-    pub const M: Key = Key(b'm' as i32);
-    pub const N: Key = Key(b'n' as i32);
-    pub const O: Key = Key(b'o' as i32);
-    pub const P: Key = Key(b'p' as i32);
-    pub const Q: Key = Key(b'q' as i32);
-    pub const R: Key = Key(b'r' as i32);
-    pub const S: Key = Key(b's' as i32);
-    pub const T: Key = Key(b't' as i32);
-    pub const U: Key = Key(b'u' as i32);
-    pub const V: Key = Key(b'v' as i32);
-    pub const W: Key = Key(b'w' as i32);
-    pub const X: Key = Key(b'x' as i32);
-    pub const Y: Key = Key(b'y' as i32);
-    pub const Z: Key = Key(b'z' as i32);
+    pub const A: Key = Key(b'a' as u16);
+    pub const B: Key = Key(b'b' as u16);
+    pub const C: Key = Key(b'c' as u16);
+    pub const D: Key = Key(b'd' as u16);
+    pub const E: Key = Key(b'e' as u16);
+    pub const F: Key = Key(b'f' as u16);
+    pub const G: Key = Key(b'g' as u16);
+    pub const H: Key = Key(b'h' as u16);
+    pub const I: Key = Key(b'i' as u16);
+    pub const J: Key = Key(b'j' as u16);
+    pub const K: Key = Key(b'k' as u16);
+    pub const L: Key = Key(b'l' as u16);
+    pub const M: Key = Key(b'm' as u16);
+    pub const N: Key = Key(b'n' as u16);
+    pub const O: Key = Key(b'o' as u16);
+    pub const P: Key = Key(b'p' as u16);
+    pub const Q: Key = Key(b'q' as u16);
+    pub const R: Key = Key(b'r' as u16);
+    pub const S: Key = Key(b's' as u16);
+    pub const T: Key = Key(b't' as u16);
+    pub const U: Key = Key(b'u' as u16);
+    pub const V: Key = Key(b'v' as u16);
+    pub const W: Key = Key(b'w' as u16);
+    pub const X: Key = Key(b'x' as u16);
+    pub const Y: Key = Key(b'y' as u16);
+    pub const Z: Key = Key(b'z' as u16);
 
     //Arrow keys
     pub const LEFT: Key = Key(5000);
