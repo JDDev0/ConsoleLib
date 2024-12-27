@@ -1,7 +1,7 @@
 [package]
 build = "build.rs"
 name = "console-lib"
-version = "0.1.1"
+version = "0.2.0-dev"
 edition = "2021"
 authors = ["JDDev0 <jddev0@dorneger.at>"]
 description = "A very simple TUI library for Linux (ncurses) and Windows (Win-API)"
