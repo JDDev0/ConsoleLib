@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 
 [build-dependencies]
-cmake = "0.1.51"
+cmake = "0.1.52"
 
 [features]
 custom_panic_hook = []
