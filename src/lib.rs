@@ -9,7 +9,7 @@ use std::sync::Once;
 mod bindings {
     use std::ffi::{c_char, c_int};
 
-    extern "C" {
+    unsafe extern "C" {
         pub fn clrscr();
 
         pub fn initConsole();
